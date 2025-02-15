@@ -62,7 +62,7 @@ def parse_action(module_str: str, action_name: str) -> PythonAction:
     if isinstance(action_decorator, ast.Call):
         # Ensure the decorator has arguments if expected
         if not action_decorator.keywords:
-            raise ValueError("The @action decorator must include arguments.")
+            raise ValueError("The arguments display_name and display_namespace must be defined for the @action decorator.")
 
         for arg in action_decorator.keywords:
             if not isinstance(arg.value, (ast.Constant, ast.List)):
