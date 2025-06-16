@@ -1,5 +1,5 @@
 from admyral.models.action import Argument, PythonAction, ActionMetadata
-from admyral.models.auth import AuthenticatedUser, User
+from admyral.models.auth import AuthenticatedUser, User, UserProfile
 from admyral.models.api_key import ApiKey
 from admyral.models.pip_lockfile import PipLockfile
 from admyral.models.schedule import Schedule, ScheduleType
@@ -26,6 +26,7 @@ from admyral.models.workflow_run import (
     WorkflowRunStep,
     WorkflowRunMetadata,
     WorkflowRunStepMetadata,
+    WorkflowRunStepWithSerializedResult,
 )
 from admyral.models.workflow_webhook import WorkflowWebhook
 from admyral.models.workflow_schedule import WorkflowSchedule
@@ -61,6 +62,7 @@ from admyral.models.editor import (
     EditorWebhookTrigger,
     EditorScheduleType,
 )
+from admyral.models.workflow_control_result import WorkflowControlResult
 
 __all__ = [
     "PipLockfile",
@@ -123,4 +125,7 @@ __all__ = [
     "AuthenticatedUser",
     "User",
     "ApiKey",
+    "UserProfile",
+    "WorkflowControlResult",
+    "WorkflowRunStepWithSerializedResult",
 ]

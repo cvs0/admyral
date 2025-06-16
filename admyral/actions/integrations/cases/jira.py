@@ -1,17 +1,29 @@
 from typing import Annotated, Literal
 import base64
 from httpx import Client
+from pydantic import BaseModel
 
 from admyral.typings import JsonValue
 from admyral.action import action, ArgumentMetadata
 from admyral.context import ctx
 from admyral.utils.collections import is_empty
+from admyral.secret.secret import register_secret
+from admyral.exceptions import NonRetryableActionError
 
 
-def get_jira_client(domain: str, email: str, api_key: str) -> Client:
-    api_key_base64 = base64.b64encode(f"{email}:{api_key}".encode()).decode()
+@register_secret(secret_type="Jira")
+class JiraSecret(BaseModel):
+    domain: str
+    email: str
+    api_key: str
+
+
+def get_jira_client(secret: JiraSecret) -> Client:
+    api_key_base64 = base64.b64encode(
+        f"{secret.email}:{secret.api_key}".encode()
+    ).decode()
     return Client(
-        base_url=f"https://{domain}/rest/api/3",
+        base_url=f"https://{secret.domain}/rest/api/3",
         headers={
             "Authorization": f"Basic {api_key_base64}",
             "Content-Type": "application/json",
@@ -112,9 +124,7 @@ def create_jira_issue(
     # Atlassian Document Format: https://developer.atlassian.com/cloud/jira/platform/apis/document/structure/
     # https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-post
     secret = ctx.get().secrets.get("JIRA_SECRET")
-    domain = secret["domain"]
-    email = secret["email"]
-    api_key = secret["api_key"]
+    secret = JiraSecret.model_validate(secret)
 
     body = {
         "fields": {
@@ -148,7 +158,7 @@ def create_jira_issue(
         for key, value in custom_fields.items():
             body["fields"][key] = value
 
-    with get_jira_client(domain, email, api_key) as client:
+    with get_jira_client(secret) as client:
         response = client.post(
             "/issue",
             json=body,
@@ -171,22 +181,38 @@ def update_jira_issue_status(
             description="The ID or the key of the issue",
         ),
     ],
-    transition_id: Annotated[
-        str,
+    status: Annotated[
+        str | None,
         ArgumentMetadata(
-            display_name="Transition ID",
-            description="The ID of the transition",
+            display_name="Status",
+            description="The status to set the issue to",
         ),
     ],
 ) -> None:
     # https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-issueidorkey-transitions-post
     # https://community.atlassian.com/t5/Jira-questions/How-do-i-find-a-transition-ID/qaq-p/2113213
+    # https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-issueidorkey-transitions-get
     secret = ctx.get().secrets.get("JIRA_SECRET")
-    domain = secret["domain"]
-    email = secret["email"]
-    api_key = secret["api_key"]
+    secret = JiraSecret.model_validate(secret)
 
-    with get_jira_client(domain, email, api_key) as client:
+    with get_jira_client(secret) as client:
+        response = client.get(f"/issue/{issue_id_or_key}/transitions")
+        response.raise_for_status()
+        transitions = response.json()
+        transition_id = next(
+            (
+                t["id"]
+                for t in transitions.get("transitions", [])
+                if t["name"].lower() == status.lower()
+            ),
+            None,
+        )
+        if transition_id is None:
+            raise NonRetryableActionError(
+                f"Could not move the Jira issue into status {status} because there is no transition "
+                "into this status from the current status."
+            )
+
         response = client.post(
             f"/issue/{issue_id_or_key}/transitions",
             json={
@@ -222,11 +248,9 @@ def comment_jira_issue_status(
 ) -> None:
     # https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-issueidorkey-transitions-post
     secret = ctx.get().secrets.get("JIRA_SECRET")
-    domain = secret["domain"]
-    email = secret["email"]
-    api_key = secret["api_key"]
+    secret = JiraSecret.model_validate(secret)
 
-    with get_jira_client(domain, email, api_key) as client:
+    with get_jira_client(secret) as client:
         response = client.post(
             f"/issue/{issue_id_or_key}/comment",
             json={"body": comment},
@@ -258,11 +282,9 @@ def search_jira_issues(
 ) -> list[JsonValue]:
     # https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-search/#api-rest-api-3-search-get
     secret = ctx.get().secrets.get("JIRA_SECRET")
-    domain = secret["domain"]
-    email = secret["email"]
-    api_key = secret["api_key"]
+    secret = JiraSecret.model_validate(secret)
 
-    with get_jira_client(domain, email, api_key) as client:
+    with get_jira_client(secret) as client:
         offset = 0
         issues = []
 
@@ -320,11 +342,9 @@ def get_jira_audit_records(
 ):
     # https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-audit-records/#api-rest-api-3-auditing-record-get
     secret = ctx.get().secrets.get("JIRA_SECRET")
-    domain = secret["domain"]
-    email = secret["email"]
-    api_key = secret["api_key"]
+    secret = JiraSecret.model_validate(secret)
 
-    with get_jira_client(domain, email, api_key) as client:
+    with get_jira_client(secret) as client:
         offset = 0
         logs = []
 
@@ -350,3 +370,53 @@ def get_jira_audit_records(
                 break
 
         return logs if limit is None else logs[:limit]
+
+
+@action(
+    display_name="Get Project",
+    display_namespace="Jira",
+    description="Get a Jira project",
+    secrets_placeholders=["JIRA_SECRET"],
+)
+def get_jira_project(
+    project_id_or_key: Annotated[
+        str,
+        ArgumentMetadata(
+            display_name="Project ID or Key",
+            description="The ID or the key of the project",
+        ),
+    ],
+) -> dict[str, JsonValue]:
+    # https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-projects/#api-rest-api-3-project-projectidorkey-get
+    secret = ctx.get().secrets.get("JIRA_SECRET")
+    secret = JiraSecret.model_validate(secret)
+
+    with get_jira_client(secret) as client:
+        response = client.get(f"/project/{project_id_or_key}")
+        response.raise_for_status()
+        return response.json()
+
+
+@action(
+    display_name="Get Transitions",
+    display_namespace="Jira",
+    description="Get a Jira transition",
+    secrets_placeholders=["JIRA_SECRET"],
+)
+def get_jira_transitions(
+    issue_id_or_key: Annotated[
+        str,
+        ArgumentMetadata(
+            display_name="Issue ID or Key",
+            description="The ID or the key of the issue",
+        ),
+    ],
+) -> list[dict[str, JsonValue]]:
+    # https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issue-issueidorkey-transitions-get
+    secret = ctx.get().secrets.get("JIRA_SECRET")
+    secret = JiraSecret.model_validate(secret)
+
+    with get_jira_client(secret) as client:
+        response = client.get(f"/issue/{issue_id_or_key}/transitions")
+        response.raise_for_status()
+        return response.json()

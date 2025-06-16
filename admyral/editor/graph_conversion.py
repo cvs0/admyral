@@ -174,7 +174,7 @@ def editor_workflow_graph_to_workflow(
             workflow_dag[node.id] = ActionNode(
                 id=node.id,
                 type=node.action_type,
-                result_name=node.result_name,
+                result_name=node.result_name if node.result_name else None,
                 secrets_mapping=node.secrets_mapping,
                 args={
                     k: deserialize_json_with_reference(v) for k, v in node.args.items()

@@ -148,6 +148,7 @@ class GlobalConfig(BaseModel):
 
     id: str
     default_user_id: str = "38815447-e272-4299-94c0-29a2d30435f9"
+    default_user_email: str = "default.user@admyral.ai"
     telemetry_disabled: bool = ADMYRAL_DISABLE_TELEMETRY
     storage_directory: str = get_local_storage_path()
     database_type: DatabaseType = ADMYRAL_DATABASE_TYPE
@@ -248,3 +249,8 @@ AUTH_SECRET = os.getenv(
 
 
 TEST_USER_ID = "a2f038f1-e35b-4509-bcc4-c08bd0e481a6"
+
+
+TEMPORAL_PAYLOAD_LIMIT = (
+    1.9 * 1024 * 1024
+)  # 2 MiB but we want to be safe and keep some room

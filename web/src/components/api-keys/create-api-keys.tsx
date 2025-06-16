@@ -1,7 +1,7 @@
 "use client";
 
 import { useCreateApiKey } from "@/hooks/use-create-api-key";
-import { errorToast } from "@/lib/toast";
+import { useToast } from "@/providers/toast";
 import { useApiKeysStore } from "@/stores/api-keys-store";
 import { InfoCircledIcon, PlusIcon } from "@radix-ui/react-icons";
 import {
@@ -25,6 +25,7 @@ export default function CreateApiKey() {
 	const [state, setState] = useState<State>(State.CLOSED);
 	const [name, setName] = useState<string | undefined>(undefined);
 	const [secretKey, setSecretKey] = useState<string>("");
+	const { errorToast } = useToast();
 
 	const createApiKey = useCreateApiKey();
 	const { addApiKey } = useApiKeysStore();
@@ -32,10 +33,7 @@ export default function CreateApiKey() {
 
 	useEffect(() => {
 		if (createApiKey.isSuccess) {
-			addApiKey({
-				id: createApiKey.data.key.id,
-				name: createApiKey.data.key.name,
-			});
+			addApiKey(createApiKey.data.key);
 			setSecretKey(createApiKey.data.secret);
 			setState(State.SHOW_KEY);
 			createApiKey.reset();

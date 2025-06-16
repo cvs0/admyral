@@ -10,7 +10,7 @@ import {
 	TReactFlowNode,
 	TReactFlowEdge,
 } from "@/types/react-flow";
-import { produce } from "immer";
+import { produce, enableMapSet } from "immer";
 import {
 	addEdge,
 	applyEdgeChanges,
@@ -48,6 +48,8 @@ function buildStartNode(
 	};
 }
 
+enableMapSet();
+
 type WorkflowStoreState = TReactFlowGraph & {
 	// Other
 	isNew: boolean;
@@ -56,6 +58,7 @@ type WorkflowStoreState = TReactFlowGraph & {
 	webhookSecret: string | null;
 	lastDeletedEdges: TReactFlowEdge[];
 	payloadCache: string;
+	deletedSecretsForNodes: Map<string, Set<string>> | undefined;
 	// Operations
 	clearWorkflowStore: () => void;
 	initWorkflow: (workflowId: string, windowInnerWidth: number) => void;
@@ -87,6 +90,13 @@ type WorkflowStoreState = TReactFlowGraph & {
 	deleteNodeByIdx: (nodeIdx: number) => void;
 	deleteControlByIdx: (controlIdx: number) => void;
 	duplicateNodeByIdx: (nodeIdx: number) => void;
+	hasDeletedSecret: (nodeId: string, secretPlaceholer?: string) => boolean;
+	setDeletedSecrets: (deletedSecrets: Map<string, Set<string>>) => void;
+	removeDeletedSecretByPlaceholder: (
+		nodeId: string,
+		secretPlaceholer: string,
+	) => void;
+	deleteEdge: (edgeId: string) => void;
 	// Settings Side Panel
 	detailPageType: "workflow" | "action" | null;
 	selectedNodeIdx: number | null;
@@ -106,6 +116,7 @@ export const useWorkflowStore = create<WorkflowStoreState>((set, get) => ({
 	isActive: false,
 	nodes: [],
 	edges: [],
+	deletedSecretsForNodes: undefined,
 	// Other
 	isNew: false,
 	nextId: 0,
@@ -123,11 +134,12 @@ export const useWorkflowStore = create<WorkflowStoreState>((set, get) => ({
 			isActive: false,
 			nodes: [],
 			edges: [],
+			deletedSecretsForNodes: undefined,
 			isNew: false,
 			nextId: 0,
 			webhookId: null,
 			webhookSecret: null,
-			detailPageType: "workflow",
+			detailPageType: null,
 			selectedNodeIdx: null,
 		});
 	},
@@ -140,11 +152,12 @@ export const useWorkflowStore = create<WorkflowStoreState>((set, get) => ({
 			controls: [],
 			isActive: false,
 			nodes: [buildStartNode(windowInnerWidth)],
+			deletedSecretsForNodes: undefined,
 			edges: [],
 			isNew: true,
 			webhookId: null,
 			webhookSecret: null,
-			detailPageType: "workflow",
+			detailPageType: null,
 			selectedNodeIdx: null,
 		});
 	},
@@ -232,10 +245,9 @@ export const useWorkflowStore = create<WorkflowStoreState>((set, get) => ({
 	},
 	onNodesChange: (changes: NodeChange[]) => {
 		// Don't allow deleting start nodes
-		const isStartRemovalTry =
-			changes.filter(
-				(change) => change.type === "remove" && change.id === "start",
-			).length > 0;
+		const isStartRemovalTry = changes.some(
+			(change) => change.type === "remove" && change.id === "start",
+		);
 		if (isStartRemovalTry) {
 			// we ignore the deletion but we need to add the previously deleted
 			// edges back
@@ -248,8 +260,7 @@ export const useWorkflowStore = create<WorkflowStoreState>((set, get) => ({
 			return;
 		}
 
-		const isDeletion =
-			changes.filter((change) => change.type === "remove").length > 0;
+		const isDeletion = changes.some((change) => change.type === "remove");
 		set({
 			nodes: applyNodeChanges(changes, get().nodes),
 			detailPageType:
@@ -372,6 +383,40 @@ export const useWorkflowStore = create<WorkflowStoreState>((set, get) => ({
 			}),
 		);
 	},
+	hasDeletedSecret: (nodeId: string, secretPlaceholder?: string) => {
+		const deletedSecrets = get().deletedSecretsForNodes;
+		return !!(secretPlaceholder === undefined
+			? deletedSecrets?.has(nodeId)
+			: deletedSecrets?.get(nodeId)?.has(secretPlaceholder));
+	},
+	setDeletedSecrets: (deletedSecrets: Map<string, Set<string>>) =>
+		set(
+			produce((draft) => {
+				draft.deletedSecretsForNodes = deletedSecrets;
+			}),
+		),
+	removeDeletedSecretByPlaceholder: (
+		nodeId: string,
+		secretPlaceholder: string,
+	) =>
+		set(
+			produce((draft) => {
+				const secretPlaceholdersWithDeletedSecrets =
+					draft.deletedSecretsForNodes?.get(nodeId);
+				secretPlaceholdersWithDeletedSecrets?.delete(secretPlaceholder);
+				if (secretPlaceholdersWithDeletedSecrets?.size === 0) {
+					draft.deletedSecretsForNodes?.delete(nodeId);
+				}
+			}),
+		),
+	deleteEdge: (edgeId: string) =>
+		set(
+			produce((draft) => {
+				draft.edges = draft.edges.filter(
+					(edge: TReactFlowEdge) => edge.id !== edgeId,
+				);
+			}),
+		),
 	deleteNodeByIdx: (nodeIdx: number) =>
 		set(
 			produce((draft) => {
@@ -398,7 +443,7 @@ export const useWorkflowStore = create<WorkflowStoreState>((set, get) => ({
 			}),
 		),
 	// Settings Side Panel
-	detailPageType: "workflow",
+	detailPageType: null,
 	selectedNodeIdx: null,
 	clickWorkflowSettings: () =>
 		set(

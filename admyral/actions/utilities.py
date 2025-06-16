@@ -3,10 +3,16 @@ import json
 import time
 from datetime import datetime, timedelta, UTC
 import yaml
+from copy import deepcopy
 
 from admyral.action import action, ArgumentMetadata
 from admyral.typings import JsonValue
 from admyral.context import ctx
+from admyral.compiler.condition_compiler import compile_condition_str
+from admyral.workers.if_condition_executor import (
+    ConditionReferenceResolution,
+    ConditionEvaluator,
+)
 
 
 @action(
@@ -111,9 +117,21 @@ def get_time_interval_of_last_n_days(
             description="Number of days to go back.",
         ),
     ] = 1,
+    only_date: Annotated[
+        bool,
+        ArgumentMetadata(
+            display_name="Only Date",
+            description="If true, only the date is returned.",
+        ),
+    ] = False,
 ) -> list[str]:
     end_time = datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
-    start_time = (end_time - timedelta(days=n_days)).isoformat().replace("+00:00", "Z")
+    start_time = end_time - timedelta(days=n_days)
+
+    if only_date:
+        return [start_time.strftime("%Y-%m-%d"), end_time.strftime("%Y-%m-%d")]
+
+    start_time = start_time.isoformat().replace("+00:00", "Z")
     return [start_time, end_time.isoformat().replace("+00:00", "Z")]
 
 
@@ -214,3 +232,183 @@ def split_text(
     ],
 ) -> list[str]:
     return text.split(pattern)
+
+
+@action(
+    display_name="Build Lookup Table",
+    display_namespace="Admyral",
+    description="Builds a lookup table from an array of objects.",
+)
+def build_lookup_table(
+    input_list: Annotated[
+        list[JsonValue],
+        ArgumentMetadata(
+            display_name="Input List",
+            description="A list of objects to build the lookup table from.",
+        ),
+    ],
+    key_path: Annotated[
+        list[str],
+        ArgumentMetadata(
+            display_name="Key Path",
+            description='The key path to use as the lookup key (e.g., ["email"]).',
+        ),
+    ],
+) -> dict[str, JsonValue]:
+    lookup_table = {}
+    for obj in input_list:
+        key = obj
+        for key_part in key_path:
+            key = key[key_part]
+        lookup_table[key] = obj
+    return lookup_table
+
+
+@action(
+    display_name="Filter",
+    display_namespace="Admyral",
+    description="Filters a list of objects by a condition. The action iterates over the list of objects and applies a filter to each object. "
+    "When the condition evaluates to false, then the object is removed from the list. The current object in the filter condition is represented by 'x'. "
+    "In order to use results from previous actions in the filter condition, you can use the 'values' parameter.",
+)
+def filter(
+    input_list: Annotated[
+        list[JsonValue],
+        ArgumentMetadata(
+            display_name="Input List",
+            description="The list of objects to filter.",
+        ),
+    ],
+    filter: Annotated[
+        str,
+        ArgumentMetadata(
+            display_name="Filter",
+            description="The filter condition (e.g., \"x['email'] not in okta_users\"). Note: The current object is represented by 'x'.",
+        ),
+    ],
+    values: Annotated[
+        dict[str, JsonValue] | None,
+        ArgumentMetadata(
+            display_name="Values",
+            description='Values (results from previous actions) to use in the filter condition for comparisons (e.g., {"okta_users": okta_users}).',
+        ),
+    ] = None,
+) -> list[JsonValue]:
+    values = values or {}
+    compiled_filter_expr = compile_condition_str(filter)
+    filtered_input_list = []
+    for x in input_list:
+        values["x"] = x
+        copy_compiled_filter_expr = deepcopy(compiled_filter_expr)
+        expr = ConditionReferenceResolution(values).resolve_references(
+            copy_compiled_filter_expr
+        )
+        if ConditionEvaluator().evaluate(expr):
+            filtered_input_list.append(x)
+    return filtered_input_list
+
+
+@action(
+    display_name="Join Lists",
+    display_namespace="Admyral",
+    description="Performs an inner join between 2 lists, i.e., returns a list of objects that have matching keys in both lists.",
+)
+def join_lists(
+    list1: Annotated[
+        list[JsonValue],
+        ArgumentMetadata(
+            display_name="List 1",
+            description="The first list to join.",
+        ),
+    ],
+    list1_join_key_paths: Annotated[
+        list[list[str]],
+        ArgumentMetadata(
+            display_name="Keys",
+            description="The keys to join the lists on.",
+        ),
+    ],
+    list2: Annotated[
+        list[JsonValue],
+        ArgumentMetadata(
+            display_name="List 2",
+            description="The second list to join.",
+        ),
+    ],
+    list2_join_key_paths: Annotated[
+        list[list[str]],
+        ArgumentMetadata(
+            display_name="Keys",
+            description="The keys to join the lists on.",
+        ),
+    ],
+    key_prefix_list1: Annotated[
+        str | None,
+        ArgumentMetadata(
+            display_name="Key Prefix",
+            description="The prefix to add to the keys of the second list.",
+        ),
+    ] = None,
+    key_prefix_list2: Annotated[
+        str | None,
+        ArgumentMetadata(
+            display_name="Key Prefix",
+            description="The prefix to add to the keys of the second list.",
+        ),
+    ] = None,
+) -> list[JsonValue]:
+    def calculate_join_key(entry, key_paths):
+        composed_key = []
+        for key_path in key_paths:
+            key = entry
+            for key_part in key_path:
+                key = key[key_part]
+            composed_key.append(key)
+        return tuple(composed_key)
+
+    ht = {}
+    for entry in list2:
+        key = calculate_join_key(entry, list2_join_key_paths)
+        ht[key] = entry
+
+    join_result = []
+    for entry in list1:
+        key = calculate_join_key(entry, list1_join_key_paths)
+        if entry_list2 := ht.get(key):
+            entry_list2 = deepcopy(entry_list2)
+            new_entry = deepcopy(entry)
+            if key_prefix_list1:
+                new_entry = {f"{key_prefix_list1}{k}": v for k, v in new_entry.items()}
+            if key_prefix_list2:
+                entry_list2 = {
+                    f"{key_prefix_list2}{k}": v for k, v in entry_list2.items()
+                }
+            new_entry |= entry_list2
+
+            join_result.append(new_entry)
+
+    return join_result
+
+
+@action(
+    display_name="Select Fields from Objects in List",
+    display_namespace="Admyral",
+    description="Selects fields from a list of JSON objects.",
+)
+def select_fields_from_objects_in_list(
+    input_list: Annotated[
+        list[dict[str, JsonValue]],
+        ArgumentMetadata(
+            display_name="Input List",
+            description="The list of objects to select fields from.",
+        ),
+    ],
+    fields: Annotated[
+        list[str],
+        ArgumentMetadata(
+            display_name="Fields",
+            description="The keys to select from the objects.",
+        ),
+    ],
+) -> list[dict[str, JsonValue]]:
+    return [{field: x[field] for field in fields} for x in input_list]

@@ -2,7 +2,7 @@ import { Box, Flex, Text } from "@radix-ui/themes";
 import WorkflowRunStep from "./workflow-run-step";
 import { useGetWorkflowRunStepsApi } from "@/hooks/use-get-workflow-run-steps-api";
 import { useEffect, useState } from "react";
-import { errorToast } from "@/lib/toast";
+import { useToast } from "@/providers/toast";
 import Row from "./row";
 import ErrorCallout from "@/components/utils/error-callout";
 import { TWorkflowRunStepMetadata } from "@/types/workflow-runs";
@@ -24,6 +24,7 @@ export default function WorkflowRunTrace({
 	);
 	const [selectedStepIdx, setSelectedStepIdx] = useState<number>(0);
 	const [steps, setSteps] = useState<TWorkflowRunStepMetadata[]>([]);
+	const { errorToast } = useToast();
 
 	useEffect(() => {
 		if (data) {
@@ -77,12 +78,18 @@ export default function WorkflowRunTrace({
 							selected={idx === selectedStepIdx}
 							onClickOnUnselectedRow={() => handleClickStep(idx)}
 						>
-							<Flex align="center" justify="between" width="100%">
-								<ActionIcon
-									actionType={workflowStep.actionType}
-								/>
+							<Flex align="center" width="100%" gap="2">
+								<Flex
+									width="24px"
+									height="24px"
+									justify="center"
+								>
+									<ActionIcon
+										actionType={workflowStep.actionType}
+									/>
+								</Flex>
 								<Flex align="center" justify="center" gap="1">
-									<Text size="1">
+									<Text size="1" align="left">
 										{workflowStep.actionType === "start"
 											? "Start"
 											: actionsIndex[

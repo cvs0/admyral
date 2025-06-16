@@ -7,7 +7,9 @@ import { WorkflowRunMetadata } from "@/types/workflow-runs";
 import { HTTPMethod } from "@/types/api";
 
 // GET /api/v1/runs/<workflow-id>
-const ListWorkflowRunsRequest = z.void();
+const ListWorkflowRunsRequest = z.object({
+	limit: z.number().min(0).optional(),
+});
 const ListWorkflowRunsResponse = z.array(WorkflowRunMetadata);
 
 const buildListWorkflowRunsApi = (workflowId: string) =>
@@ -23,10 +25,13 @@ const buildListWorkflowRunsApi = (workflowId: string) =>
 
 const REFETCH_INTERVAL_1_SECOND = 1_000; // in ms
 
-export const useListWorkflowRunsApi = (workflowId: string) => {
+export const useListWorkflowRunsApi = (workflowId: string, limit?: number) => {
 	return useQuery({
-		queryKey: ["workflowRuns", workflowId],
-		queryFn: () => buildListWorkflowRunsApi(workflowId)(),
+		queryKey: ["workflowRuns", workflowId, limit],
+		queryFn: () => {
+			const params = typeof limit === "number" ? { limit } : {};
+			return buildListWorkflowRunsApi(workflowId)(params);
+		},
 		refetchInterval: REFETCH_INTERVAL_1_SECOND,
 	});
 };

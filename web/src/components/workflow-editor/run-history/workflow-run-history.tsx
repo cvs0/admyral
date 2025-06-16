@@ -1,43 +1,26 @@
 import { useListWorkflowRunsApi } from "@/hooks/use-list-workflow-runs-api";
-import { errorToast } from "@/lib/toast";
-import { Box, Flex, Spinner, ScrollArea, Text } from "@radix-ui/themes";
+import { useToast } from "@/providers/toast";
+import { Box, Flex, ScrollArea, Text } from "@radix-ui/themes";
 import { useEffect, useState } from "react";
 import WorkflowRunTrace from "./workflow-run-trace";
 import Row from "./row";
 import ErrorCallout from "@/components/utils/error-callout";
-import { CheckCircledIcon, CrossCircledIcon } from "@radix-ui/react-icons";
 import { TWorkflowRunMetadata } from "@/types/workflow-runs";
+import WorkflowRunStatusIndicator from "./workflow-run-status-indicator";
 
 function WorkflowRunRow({
-	workflowRun: { createdAt, failedAt, completedAt },
+	workflowRun,
 }: {
 	workflowRun: TWorkflowRunMetadata;
 }) {
-	if (failedAt === null && completedAt === null) {
-		// In Progress
-		return (
-			<Flex align="center" justify="between" width="100%">
-				<Text size="1">{createdAt}</Text>
-				<Spinner size="1" />
-			</Flex>
-		);
-	}
+	const createdAtAsReadableString = new Date(
+		workflowRun.createdAt,
+	).toLocaleString("en-US");
 
-	if (completedAt === null) {
-		// Failure
-		return (
-			<Flex align="center" justify="between" width="100%">
-				<Text size="1">{createdAt}</Text>
-				<CrossCircledIcon color="red" />
-			</Flex>
-		);
-	}
-
-	// Success
 	return (
 		<Flex align="center" justify="between" width="100%">
-			<Text size="1">{createdAt}</Text>
-			<CheckCircledIcon color="green" />
+			<Text size="1">{createdAtAsReadableString}</Text>
+			<WorkflowRunStatusIndicator workflowRun={workflowRun} />
 		</Flex>
 	);
 }
@@ -50,6 +33,7 @@ export default function WorkflowRunHistory({
 	const { data, isPending, error } = useListWorkflowRunsApi(workflowId);
 	const [selectedRunIdx, setSelectedRunIdx] = useState<number | null>(null);
 	const [runs, setRuns] = useState<TWorkflowRunMetadata[]>([]);
+	const { errorToast } = useToast();
 
 	useEffect(() => {
 		if (data && data.length > 0) {
@@ -72,7 +56,15 @@ export default function WorkflowRunHistory({
 		if (error) {
 			errorToast("Failed to load workflow runs. Please reload the page.");
 		}
-	}, [data, error, setRuns, setSelectedRunIdx, runs, selectedRunIdx]);
+	}, [
+		data,
+		error,
+		setRuns,
+		setSelectedRunIdx,
+		runs,
+		selectedRunIdx,
+		errorToast,
+	]);
 
 	if (isPending) {
 		return <Text>Loading...</Text>;

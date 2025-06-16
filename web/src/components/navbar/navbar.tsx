@@ -1,12 +1,11 @@
 "use client";
 
-import { Badge, Box, Flex, HoverCard, Separator } from "@radix-ui/themes";
+import { Badge, Box, Flex, HoverCard } from "@radix-ui/themes";
 import Logo from "@/components/icons/logo";
 import Link from "next/link";
 import SettingsIcon from "@/components/icons/settings-icon";
 import WorkflowOverviewIcon from "@/components/icons/workflow-overview-icon";
 import DashboardIcon from "@/components/icons/dashboard-icon";
-import Image from "next/image";
 import NavLink from "./navlink";
 
 export default function Nav() {
@@ -53,50 +52,6 @@ export default function Nav() {
 						icon={<WorkflowOverviewIcon />}
 						selectionCriteria={["/", "/workflows"]}
 					/>
-
-					<Separator size="2" color="gray" />
-
-					<HoverCard.Root>
-						<HoverCard.Trigger>
-							<Link
-								href="https://discord.com/invite/GqbJZT9Hbf"
-								target="_blank"
-							>
-								<Image
-									src="/discord_logo.svg"
-									alt="Discord"
-									width={18}
-									height={18}
-								/>
-							</Link>
-						</HoverCard.Trigger>
-						<HoverCard.Content style={{ padding: 0 }}>
-							<Badge size="3" color="green">
-								Join us on Discord!
-							</Badge>
-						</HoverCard.Content>
-					</HoverCard.Root>
-
-					<HoverCard.Root>
-						<HoverCard.Trigger>
-							<Link
-								href="https://github.com/admyral-security/admyral"
-								target="_blank"
-							>
-								<Image
-									src="/github_logo.svg"
-									alt="Slack"
-									width={18}
-									height={18}
-								/>
-							</Link>
-						</HoverCard.Trigger>
-						<HoverCard.Content style={{ padding: 0 }}>
-							<Badge size="3" color="green">
-								Visit us on GitHub!
-							</Badge>
-						</HoverCard.Content>
-					</HoverCard.Root>
 				</Flex>
 			</Flex>
 

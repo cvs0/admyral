@@ -3,7 +3,7 @@ import { Tabs } from "nextra/components";
 
 # Pre-defined Actions
 
-Admyral provides pre-defined actions to enable you to get started quickly. They are out-of-the-box actions to facilitate the creation of automations.
+Admyral provides pre-defined actions to enable you to get started quickly. They are out-of-the-box actions to facilitate the creation of automations and monitor your controls.
 
 <Callout type="info">
 	Within your coded automations, you can use pre-defined actions directly
@@ -71,7 +71,7 @@ Create if-branches within your automations.
 
 The following Python for if-conditions is currently supported:
 
--   Binary Operators: `==`, `!=`, `<`, `<=`, `>`, `>=`, `in`
+-   Binary Operators: `==`, `!=`, `<`, `<=`, `>`, `>=`, `in`, `not in`
 -   Unary Operators: `not`, `is None`, `is not None`
 
 You can construct condition expressions of the following types:
@@ -348,3 +348,239 @@ ghi: jkl
 | Parameter    | Type | Description                  | Required/Optional |
 | ------------ | ---- | ---------------------------- | ----------------- |
 | `json_value` | str  | The object to be serialized. | Required          |
+
+## Build Lookup Table
+
+Build a lookup table, i.e., a dictionary from a list of objects. The lookup table can be used for building conditions.
+
+Consider the following list:
+
+```json
+[
+	{ "email": "abc@gmail.com" },
+	{ "email": "def@gmail.com" },
+	{ "email": "ghi@gmail.com" }
+]
+```
+
+Building a lookup table on the key `email` results in the following lookup table:
+
+```json
+{
+	"abc@gmail.com": {
+		"email": "abc@gmail.com"
+	},
+	"def@gmail.com": {
+		"email": "def@gmail.com"
+	},
+	"ghi@gmail.com": {
+		"email": "ghi@gmail.com"
+	}
+}
+```
+
+This allows you to efficiently lookup objects based on a key.
+
+<Callout type="warning">
+	If your keys are not unique, then objects will be overwritten!
+</Callout>
+
+| Parameter    | Type            | Description                                                                                                                                                                                                                                              | Required/Optional |
+| ------------ | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| `input_list` | list            | The list to build a lookup table for.                                                                                                                                                                                                                    | Required          |
+| `key_path`   | list of strings | The path to the key used which should be used as the lookup value. For example: To build a lookup on `email` for the object `{"profile": {"email": "me@gmail.com"}}`, we need to consider the nesting of the object into account: `["profile", "email"]` | Required          |
+
+## Filter
+
+Filter out list entries which do not match a defined condition. The condition follows the same syntax as **if conditions**. The defined condition is applied on each list entry. If the condition
+returns `true`, the entry is kept. Otherwise the entry is removed from the list. The current entry in the list is always referenced by using `x`. In order to use data returned from previous actions,
+you need to pass them via the `values` parameter. Suppose you have a JSON object of valid user emails with result name `user_emails` and you want to filter on those. Then, you can pass the following values
+object `{"user_emails": user_emails}` as the `values` input. This allows you to use the `user_emails` object inside your condition: `x["email"] in user_emails`. Note that the only the keys inside the `values`
+argument must match the usage in the condition. Therefore, if our result name would be `emails` instead of `user_emails` and our `value` argument receives the object `{"user_emails": emails}`, then the
+condition `x["email"] in user_emails` is still valid.
+
+Example conditions:
+
+-   `x["company"]["name"] == "Admyral"`
+-   `x["verified"] is not None`
+-   `x["company"]["name"] == "Admyral" and x["email"] in valid_users`
+
+| Parameter    | Type            | Description         | Required/Optional |
+| ------------ | --------------- | ------------------- | ----------------- |
+| `input_list` | list            | The list to filter. | Required          |
+| `filter`     | list of strings | ...                 | Required          |
+| `values`     | object          | ...                 | Required          |
+
+Examples:
+
+```python
+# previously fetched Okta and Zendesk users
+okta_users = ...
+zendesk_users = ...
+
+invalid_zendesk_users = filter(
+    input_list=zendesk_users,
+    filter="x['email'] not in okta_users",
+    values={
+        "okta_users": okta_users
+    }
+)
+```
+
+## Join Lists
+
+Performs an inner join between two lists based on specified key paths, similar to SQL JOIN operations. The function matches objects from both lists based on common values found at the specified key paths
+and combines matched objects into a single object. Only objects that have matching keys in both lists are included in the result.
+
+For example, consider joining these lists:
+
+```json
+List 1:
+[
+    {"id": 1, "name": "John"},
+    {"id": 2, "name": "Jane"}
+]
+
+List 2:
+[
+    {"user_id": 1, "email": "john@example.com"},
+    {"user_id": 2, "email": "jane@example.com"}
+]
+
+// Joining on List 1's "id" and List 2's "user_id"
+// Result:
+[
+    {"id": 1, "name": "John", "user_id": 1, "email": "john@example.com"},
+    {"id": 2, "name": "Jane", "user_id": 2, "email": "jane@example.com"}
+]
+```
+
+You can optionally add prefixes to the keys of either list to prevent key collisions in the resulting objects. For example, adding the prefix "user\_" to List 1's keys would result in:
+
+```json
+[
+	{ "user_id": 1, "user_name": "John", "email": "john@example.com" },
+	{ "user_id": 2, "user_name": "Jane", "email": "jane@example.com" }
+]
+```
+
+| Parameter              | Type                    | Description                                                                                                                                                                                                                                                     | Required/Optional |
+| ---------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- |
+| `list1`                | list                    | The first list to join. Each element must be a JSON-serializable object.                                                                                                                                                                                        | Required          |
+| `list1_join_key_paths` | list of list of strings | The paths to the keys in list1 objects that should be used for joining. Each path is a list of strings representing nested keys. For example, `[["user", "id"]]` would access `object["user"]["id"]`. Multiple paths can be specified to join on multiple keys. | Required          |
+| `list2`                | list                    | The second list to join. Each element must be a JSON-serializable object.                                                                                                                                                                                       | Required          |
+| `list2_join_key_paths` | list of list of strings | The paths to the keys in list2 objects that should be used for joining. Must contain the same number of paths as `list1_join_key_paths`.                                                                                                                        | Required          |
+| `key_prefix_list1`     | string \| None          | Optional prefix to add to all keys from list1 in the resulting objects. Use this to prevent key collisions. Default is None.                                                                                                                                    | Optional          |
+| `key_prefix_list2`     | string \| None          | Optional prefix to add to all keys from list2 in the resulting objects. Use this to prevent key collisions. Default is None.                                                                                                                                    | Optional          |
+
+Usage Examples:
+
+```python
+# Join users with their orders
+"""
+users = [
+    {"id": 1, "name": "John"},
+    {"id": 2, "name": "Jane"}
+]
+orders = [
+    {"user_id": 1, "product": "Laptop"},
+    {"user_id": 2, "product": "Phone"}
+]
+"""
+
+users = ...
+orders = ...
+
+users_with_orders = join_lists(
+    list1=users,
+    list1_join_key_paths=[["id"]],
+    list2=orders,
+    list2_join_key_paths=[["user_id"]],
+    key_prefix_list1="user_"
+)
+# Result:
+# [
+#     {"user_id": 1, "user_name": "John", "product": "Laptop"},
+#     {"user_id": 2, "user_name": "Jane", "product": "Phone"}
+# ]
+
+# Join on multiple keys
+# employees = [
+#     {"dept_id": 1, "location_id": 100, "name": "John"},
+#     {"dept_id": 2, "location_id": 100, "name": "Jane"}
+# ]
+# departments = [
+#     {"id": 1, "location": 100, "name": "Engineering"},
+#     {"id": 2, "location": 100, "name": "Sales"}
+# ]
+
+employees = ...
+departments = ...
+
+employee_departments = join_lists(
+    list1=employees,
+    list1_join_key_paths=[["dept_id"], ["location_id"]],
+    list2=departments,
+    list2_join_key_paths=[["id"], ["location"]],
+    key_prefix_list1="employee_",
+    key_prefix_list2="department_"
+)
+# Result:
+# [
+#     {
+#         "employee_dept_id": 1,
+#         "employee_location_id": 100,
+#         "employee_name": "John",
+#         "department_id": 1,
+#         "department_location": 100,
+#         "department_name": "Engineering"
+#     },
+#     {
+#         "employee_dept_id": 2,
+#         "employee_location_id": 100,
+#         "employee_name": "Jane",
+#         "department_id": 2,
+#         "department_location": 100,
+#         "department_name": "Sales"
+#     }
+# ]
+```
+
+## Select Fields from Objects in List
+
+Extract specific fields from each object in a list. For each object in the input list, create a new object containing only the specified fields. If a field doesn't exist in an object,
+that entry will raise a KeyError. The field names must exactly match the keys in the objects.
+
+Example field selections:
+
+```
+["name", "email"] - extracts just the name and email fields
+["id", "created_at", "status"] - extracts multiple top-level fields
+```
+
+| Parameter    | Type | Description                                      | Required/Optional |
+| ------------ | ---- | ------------------------------------------------ | ----------------- |
+| `input_list` | list | The list of JSON objects to extract fields from. | Required          |
+| `fields`     | list | The field names to select from each object.      | Required          |
+
+Usage Examples:
+
+```python
+# Given a list of user objects with multiple fields
+users = [
+    {"id": 1, "name": "John", "email": "john@example.com", "role": "admin"},
+    {"id": 2, "name": "Jane", "email": "jane@example.com", "role": "user"}
+]
+
+# Extract just the name and email fields
+simplified_users = select_fields_from_objects_in_list(
+    input_list=users,
+    fields=["name", "email"]
+)
+
+# Result:
+# [
+#     {"name": "John", "email": "john@example.com"},
+#     {"name": "Jane", "email": "jane@example.com"}
+# ]
+```

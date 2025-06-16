@@ -11,6 +11,10 @@ from admyral.actions.utilities import (
     send_to_workflow,
     send_list_elements_to_workflow,
     split_text,
+    build_lookup_table,
+    filter,
+    join_lists,
+    select_fields_from_objects_in_list,
 )
 from admyral.actions.integrations.communication import (
     send_slack_message,
@@ -26,6 +30,8 @@ from admyral.actions.integrations.enrich import (
     virus_total_analyze_ip,
     virus_total_analyze_url,
     abuseipdb_analyze_ip,
+    leakcheck_v2_lookup,
+    leakcheck_public_lookup,
 )
 from admyral.actions.integrations.cases import (
     create_jira_issue,
@@ -35,6 +41,8 @@ from admyral.actions.integrations.cases import (
     get_jira_audit_records,
     create_opsgenie_alert,
     create_pagerduty_incident,
+    get_jira_project,
+    get_jira_transitions,
 )
 from admyral.actions.integrations.vulnerability_management import (
     list_snyk_vulnerabilities,
@@ -64,7 +72,7 @@ from admyral.actions.integrations.iam import (
 )
 from admyral.actions.integrations.compliance import (
     list_retool_inactive_users,
-    list_groups_per_user,
+    list_retool_groups_per_user,
     list_1password_audit_events,
     search_github_enterprise_audit_logs,
     list_github_merged_pull_requests,
@@ -78,8 +86,14 @@ from admyral.actions.integrations.compliance import (
     list_github_issue_comments,
     list_kandji_devices,
     get_kandji_device_details,
-    list_kandji_unencrypted_devices,
     get_kandji_device_apps,
+    list_zendesk_users,
+    get_kandji_application_firewall,
+    get_kandji_desktop_and_screensaver,
+    get_kandji_library_item_statuses,
+    list_retool_groups_and_apps_per_user,
+    list_retool_used_groups_and_apps_per_user,
+    list_google_drive_files_with_link_sharing_enabled,
 )
 from admyral.actions.integrations.cloud import (
     steampipe_query_aws,
@@ -88,8 +102,10 @@ from admyral.actions.integrations.cloud import (
     aws_s3_restrict_public_write_access,
     aws_s3_restrict_public_read_access,
     aws_s3_default_encryption_enabled,
+    aws_list_iam_users,
 )
 from admyral.actions.integrations.database import run_sql_query
+from admyral.actions.controls import pass_control, fail_control
 
 
 __all__ = [
@@ -130,7 +146,7 @@ __all__ = [
     "list_sentinel_one_alerts",
     "list_wiz_alerts",
     "list_retool_inactive_users",
-    "list_groups_per_user",
+    "list_retool_groups_per_user",
     "list_1password_audit_events",
     "okta_search_users",
     "okta_get_all_user_types",
@@ -161,6 +177,23 @@ __all__ = [
     "list_github_issue_comments",
     "list_kandji_devices",
     "get_kandji_device_details",
-    "list_kandji_unencrypted_devices",
     "get_kandji_device_apps",
+    "aws_list_iam_users",
+    "list_zendesk_users",
+    "build_lookup_table",
+    "filter",
+    "get_kandji_application_firewall",
+    "get_kandji_desktop_and_screensaver",
+    "get_kandji_library_item_statuses",
+    "join_lists",
+    "leakcheck_v2_lookup",
+    "leakcheck_public_lookup",
+    "list_retool_groups_and_apps_per_user",
+    "list_retool_used_groups_and_apps_per_user",
+    "list_google_drive_files_with_link_sharing_enabled",
+    "get_jira_project",
+    "get_jira_transitions",
+    "select_fields_from_objects_in_list",
+    "pass_control",
+    "fail_control",
 ]

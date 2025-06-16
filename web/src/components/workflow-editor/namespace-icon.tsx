@@ -31,6 +31,10 @@ const NAMESPACE_ICON_MAPPING: Record<string, string> = {
 	"Google Drive": "/google_drive_icon.svg",
 	"Microsoft Intune": "/ms_intunes_logo.svg",
 	Kandji: "/kandji_logo.svg",
+	Zendesk: "/zendesk_logo.svg",
+	LeakCheck: "/leakcheck_logo.png",
+	Azure: "/azure_logo.svg",
+	Controls: "/control-icon.svg",
 };
 
 export default function NamespaceIcon({ namespace }: { namespace: string }) {

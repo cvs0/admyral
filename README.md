@@ -5,9 +5,9 @@
 <div align="center">
   <div>
     <h3>
-        <a href="https://docs.admyral.dev/"><strong>Docs</strong></a> ·
-        <a href="https://discord.gg/GqbJZT9Hbf"><strong>Discord</strong></a> ·
-        <a href="https://github.com/Admyral-Security/admyral-quickstart"><strong>Quickstart</strong></a>
+        <a href="https://docs.admyral.dev/"><strong>📚 Docs</strong></a> ·
+        <a href="https://discord.gg/GqbJZT9Hbf"><strong>💬 Discord</strong></a> ·
+        <a href="https://github.com/Admyral-Security/admyral-quickstart"><strong>🏎️ Quickstart</strong></a>
     </h3>
   </div>
   <div>
@@ -28,7 +28,7 @@ Install Admyral:
 $ pip install admyral
 ```
 
-Start Admyral to access the frontend, execute workflows using Admyral's scalable workflow infrastructure:
+Start Admyral to access the frontend, automate and monitor controls using Admyral's scalable workflow infrastructure:
 
 ```bash
 $ admyral up
@@ -41,7 +41,7 @@ $ admyral up
 
 More instructions on self-hosting with Docker can be found [here](https://docs.admyral.dev/docker), and for the development setup, click [here](https://docs.admyral.dev/development_setup).
 
-## Simple, reliable Security Engineering using Admyral's Python SDK
+## Simple, reliable GRC Engineering using Admyral's Python SDK
 
 ### Automation-as-Code 🧑‍💻
 
@@ -51,11 +51,11 @@ More instructions on self-hosting with Docker can be found [here](https://docs.a
 
 ### AI Workflows 🤖
 
-Empower your workflows with AI! Admyral supports custom AI Actions using top-tier LLMs from OpenAI, Mistral, Anthropic, and more. You can use these AI Actions within your workflow to summarize findings, create a report, categorize alerts, and much more.
+Empower your control monitoring and GRC workflows with AI! Admyral supports custom AI Actions using top-tier LLMs from OpenAI, Mistral, Anthropic, and more. You can use these AI Actions within your workflow to summarize findings, create a report, categorize alerts, and much more.
 
 ### No-Code Editor Sync -- Bi-directional 👈 👉
 
-While Admyral is Code-First, there is No-Code functionality as well. Visualize your coded workflows and edit them directly in the drag-and-drop workflow builder. All changes are synced back into your code.
+Admyral is hybrid. It offers the flexibility of code and the simplicity and speed of No-Code. Using the latter, visualize your codified controls and edit them directly in the drag-and-drop workflow builder. All changes are synced back into your code.
 
 <img src="img/sync.svg" alt="admyral" />
 
@@ -63,18 +63,18 @@ While Admyral is Code-First, there is No-Code functionality as well. Visualize y
 
 <img src="img/monitoring.svg" alt="admyral" />
 
-### Reliable and Scalable Workflow Infrastructure Out-of-the-box 📦
+### Reliable and Scalable Infrastructure Out-of-the-box 📦
 
 Built on [Temporal](https://temporal.io/) (used by Netflix, Retool, and co.), Admyral ensures reliable, scalable workflows -- incl. secrets management for integrations.
 Deploy in under 5 minutes without infrastructure or scalability worries.
 
-### Start Automating Any Workflow - SecOps or GRC 🎬
+### Start Automating Any Control or GRC Workflow 🎬
 
-Make your _security operations_ more efficient, accomplish more with less resources, and standardize the quality of your SOPs.
+Make your _security grc operations_ more efficient and accomplish more with less resources.
 
-When automating workflows in _GRC/Compliance_, reduce the effort for IT-dependent manual controls.
+When automating controls in _GRC_, reduce the effort for evidence collection and establish continuous control monitoring.
 
-Example workflows can be found in [examples/playbooks/workflows](https://github.com/Admyral-Security/admyral/tree/main/examples).
+Example workflows/controls can be found in [examples/playbooks/workflows](https://github.com/Admyral-Security/admyral/tree/main/examples).
 
 ## 📃 License
 
@@ -86,6 +86,6 @@ This repository is licensed under Apache License 2.0. See [LICENSE](https://gith
 
 Admyral automatically collects telemetry data using PostHog with hosting in the EU. We want to emphasize that no personal data is sent to PostHog. The data helps us to understand how Admyral is used and improve our most relevant features as well as track the overall usage for internal and external reporting.
 
-None of data is shared with third parties and does not include any sensitive information. If you would like to opt-out of telemetry or have questions, please reach out to us via [chris@admyral.dev](mailto:chris@admyral.dev) or contact us on Discord, as we want to be transparent and respect your privacy.
+None of data is shared with third parties and does not include any sensitive information. If you would like to opt-out of telemetry or have questions, please reach out to us via [chris@admyral.ai](mailto:chris@admyral.ai) or contact us on Discord, as we want to be transparent and respect your privacy.
 
 You can opt-out by simply setting `ADMYRAL_DISABLE_TELEMETRY` to `true` in your environment variables.

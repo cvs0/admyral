@@ -1,14 +1,18 @@
-import { Code, Flex, Text, TextField } from "@radix-ui/themes";
+import { Code, Flex, Text, TextField, Select } from "@radix-ui/themes";
 import ActionIcon from "../action-icon";
 import WorkflowEditorRightPanelBase from "../right-panel-base";
 import { useWorkflowStore } from "@/stores/workflow-store";
+import { useSecretsStore } from "@/stores/secrets-store";
 import { useEditorActionStore } from "@/stores/editor-action-store";
 import { TEditorWorkflowActionNode } from "@/types/react-flow";
 import { produce } from "immer";
-import { ChangeEvent, useEffect } from "react";
+import { ChangeEvent, useEffect, useState } from "react";
 import { useImmer } from "use-immer";
 import { TActionMetadata } from "@/types/editor-actions";
 import CodeEditorWithDialog from "@/components/code-editor-with-dialog/code-editor-with-dialog";
+import useSaveWorkflow from "@/providers/save-workflow";
+import { useRouter } from "next/navigation";
+import { isValidResultName } from "@/lib/workflow-validation";
 
 function buildInitialArgs(
 	action: TEditorWorkflowActionNode,
@@ -24,9 +28,18 @@ function buildInitialArgs(
 }
 
 export default function ActionEditPanel() {
-	const { nodes, selectedNodeIdx, updateNodeData } = useWorkflowStore();
+	const router = useRouter();
+	const {
+		nodes,
+		selectedNodeIdx,
+		updateNodeData,
+		hasDeletedSecret,
+		removeDeletedSecretByPlaceholder,
+	} = useWorkflowStore();
 	const { actionsIndex } = useEditorActionStore();
-
+	const { secrets } = useSecretsStore();
+	const { saveWorkflow } = useSaveWorkflow();
+	const [validResultName, setValidResultName] = useState<boolean>(true);
 	const [args, updateArgs] = useImmer<string[]>([]);
 
 	useEffect(() => {
@@ -36,7 +49,7 @@ export default function ActionEditPanel() {
 			const actionDefinition = actionsIndex[action.data.actionType];
 			updateArgs(buildInitialArgs(actionData, actionDefinition));
 		}
-	}, [selectedNodeIdx, nodes, actionsIndex]);
+	}, [selectedNodeIdx, nodes, actionsIndex, updateArgs]);
 
 	if (selectedNodeIdx === null) {
 		return null;
@@ -55,16 +68,30 @@ export default function ActionEditPanel() {
 		);
 	};
 
+	const saveWorkflowAndRedirect = async () => {
+		const saveSuccessful = await saveWorkflow();
+		if (saveSuccessful) {
+			router.push("/settings/secrets");
+		}
+	};
+
 	const onChangeSecretsMapping = (
 		secretPlaceholder: string,
-		event: ChangeEvent<HTMLInputElement>,
+		value: string,
 	) => {
+		if (value === "$$$save_and_redirect$$$") {
+			saveWorkflowAndRedirect();
+			return;
+		}
+
 		updateNodeData(
 			selectedNodeIdx,
 			produce(actionData, (draft) => {
-				draft.secretsMapping[secretPlaceholder] = event.target.value;
+				draft.secretsMapping[secretPlaceholder] = value;
 			}),
 		);
+
+		removeDeletedSecretByPlaceholder(action.id, secretPlaceholder);
 	};
 
 	const onChangeActionArgument = (
@@ -115,8 +142,18 @@ export default function ActionEditPanel() {
 					<TextField.Root
 						variant="surface"
 						value={actionData.resultName || ""}
-						onChange={onChangeResultName}
+						onChange={(event) => {
+							onChangeResultName(event);
+							setValidResultName(
+								isValidResultName(event.target.value),
+							);
+						}}
 					/>
+					{!validResultName && (
+						<Text color="red">
+							Result names must be snake_case.
+						</Text>
+					)}
 				</Flex>
 
 				{actionDefinition.secretsPlaceholders.length > 0 && (
@@ -134,20 +171,62 @@ export default function ActionEditPanel() {
 									<Flex>
 										<Code>{secretPlaceholder}</Code>
 									</Flex>
-									<TextField.Root
-										variant="surface"
+									<Select.Root
 										value={
 											actionData.secretsMapping[
 												secretPlaceholder
 											]
 										}
-										onChange={(event) =>
+										onValueChange={(value) =>
 											onChangeSecretsMapping(
 												secretPlaceholder,
-												event,
+												value,
 											)
 										}
-									/>
+									>
+										<Select.Trigger />
+										<Select.Content>
+											<Select.Group>
+												<Select.Label>
+													Select a secret
+												</Select.Label>
+												{secrets.map((_, idx) => (
+													<Select.Item
+														key={
+															secrets[idx]
+																.secretId
+														}
+														value={
+															secrets[idx]
+																.secretId
+														}
+													>
+														{secrets[idx].secretId}
+													</Select.Item>
+												))}
+												<Select.Separator />
+												<Select.Item value="$$$save_and_redirect$$$">
+													Save Workflow and Redirect
+													to Secrets
+												</Select.Item>
+											</Select.Group>
+										</Select.Content>
+									</Select.Root>
+									{hasDeletedSecret(
+										action.id,
+										secretPlaceholder,
+									) && (
+										<Flex
+											mt="2"
+											direction="row"
+											align="center"
+										>
+											<Text color="red" weight="medium">
+												The previously selected secret
+												could not be found.
+											</Text>
+										</Flex>
+									)}
 								</Flex>
 							),
 						)}

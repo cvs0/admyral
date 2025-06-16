@@ -1,7 +1,9 @@
-from fastapi import APIRouter, status, Body, Depends
+from fastapi import APIRouter, status, Body, Depends, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
 from typing import Optional, Annotated
 from uuid import uuid4
 from pydantic import BaseModel
+import io
 
 from admyral.utils.collections import is_not_empty
 from admyral.server.deps import get_admyral_store, get_workers_client
@@ -14,17 +16,22 @@ from admyral.models import (
     WorkflowSchedule,
     WorkflowTriggerResponse,
     WorkflowMetadata,
+    WorkflowDAG,
 )
 from admyral.logger import get_logger
 from admyral.typings import JsonValue
 from admyral.server.auth import authenticate
+from admyral.compiler.yaml_workflow_compiler import (
+    compile_from_yaml_workflow,
+    validate_workflow,
+    decompile_workflow_to_yaml,
+)
 
 
 logger = get_logger(__name__)
 
 
 MANUAL_TRIGGER_SOURCE_NAME = "manual"
-SPACE = " "
 
 
 class WorkflowBody(BaseModel):
@@ -56,7 +63,8 @@ async def push_workflow_impl(
     user_id: str,
     workflow_name: str,
     workflow_id: str | None,
-    request: WorkflowPushRequest,
+    workflow_dag: WorkflowDAG,
+    activate: bool,
 ) -> WorkflowPushResponse:
     """
     Push a workflow to the store. If the workflow for the provided workflow id already exists,
@@ -66,11 +74,17 @@ async def push_workflow_impl(
         workflow_name: The workflow name.
         workflow: The workflow object.
     """
+
+    try:
+        await validate_workflow(user_id, get_admyral_store(), workflow_dag)
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e),
+        ) from e
+
     admyral_store = get_admyral_store()
     workers_client = get_workers_client()
-
-    if SPACE in workflow_name:
-        raise ValueError("Workflow name must not contain spaces.")
 
     if workflow_id:
         existing_workflow = await admyral_store.get_workflow_by_id(user_id, workflow_id)
@@ -98,8 +112,8 @@ async def push_workflow_impl(
     workflow = Workflow(
         workflow_id=workflow_id,
         workflow_name=workflow_name,
-        workflow_dag=request.workflow_dag,
-        is_active=request.activate,
+        workflow_dag=workflow_dag,
+        is_active=activate,
     )
 
     await admyral_store.store_workflow(user_id, workflow)
@@ -116,7 +130,7 @@ async def push_workflow_impl(
     new_schedules = list(
         filter(
             lambda trigger: trigger.type == WorkflowTriggerType.SCHEDULE,
-            request.workflow_dag.start.triggers,
+            workflow_dag.start.triggers,
         )
     )
     if is_not_empty(new_schedules):
@@ -133,7 +147,7 @@ async def push_workflow_impl(
             )
             await admyral_store.store_schedule(user_id, new_workflow_schedule)
 
-            if request.activate:
+            if activate:
                 await workers_client.schedule_workflow(
                     user_id, workflow, new_workflow_schedule
                 )
@@ -142,7 +156,7 @@ async def push_workflow_impl(
     filtered_webhooks = list(
         filter(
             lambda trigger: trigger.type == WorkflowTriggerType.WEBHOOK,
-            request.workflow_dag.start.triggers,
+            workflow_dag.start.triggers,
         )
     )
     if len(filtered_webhooks) > 1:
@@ -174,9 +188,8 @@ async def push_workflow_impl(
 router = APIRouter()
 
 
-@router.post("/{workflow_name}/push", status_code=status.HTTP_201_CREATED)
+@router.post("/push", status_code=status.HTTP_201_CREATED)
 async def push_workflow(
-    workflow_name: str,
     request: WorkflowPushRequest,
     authenticated_user: AuthenticatedUser = Depends(authenticate),
 ) -> WorkflowPushResponse:
@@ -188,12 +201,14 @@ async def push_workflow(
         workflow_name: The workflow name.
         workflow: The workflow object.
     """
+    workflow_dag = compile_from_yaml_workflow(request.workflow_code)
+    workflow_name = workflow_dag.name
     return await push_workflow_impl(
-        authenticated_user.user_id, workflow_name, None, request
+        authenticated_user.user_id, workflow_name, None, workflow_dag, request.activate
     )
 
 
-@router.get("/{workflow_name}", status_code=status.HTTP_200_OK)
+@router.get("/get/{workflow_name}", status_code=status.HTTP_200_OK)
 async def get_workflow(
     workflow_name: str, authenticated_user: AuthenticatedUser = Depends(authenticate)
 ) -> Optional[Workflow]:
@@ -224,7 +239,7 @@ async def list_workflows(
     return await get_admyral_store().list_workflows(authenticated_user.user_id)
 
 
-@router.post("/{workflow_name}/trigger", status_code=status.HTTP_201_CREATED)
+@router.post("/trigger/{workflow_name}", status_code=status.HTTP_201_CREATED)
 async def trigger_workflow(
     workflow_name: str,
     payload: Annotated[dict[str, JsonValue], Body()] = {},
@@ -347,4 +362,60 @@ async def delete_workflow(
     # now, we can delete the workflow
     await get_admyral_store().remove_workflow(
         authenticated_user.user_id, workflow.workflow_id
+    )
+
+
+@router.post("/import", status_code=status.HTTP_201_CREATED)
+async def import_workflow(
+    file: UploadFile, authenticated_user: AuthenticatedUser = Depends(authenticate)
+) -> str:
+    db = get_admyral_store()
+
+    yaml_str = (await file.read()).decode("utf-8")
+
+    try:
+        workflow_dag = compile_from_yaml_workflow(yaml_str)
+        await validate_workflow(authenticated_user.user_id, db, workflow_dag)
+        workflow_name = workflow_dag.name
+
+        workflow = Workflow(
+            workflow_id=str(uuid4()),
+            workflow_name=workflow_name,
+            workflow_dag=workflow_dag,
+            is_active=False,
+        )
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+        ) from e
+
+    try:
+        await db.create_workflow(authenticated_user.user_id, workflow)
+    except ValueError as e:
+        if "already exists" in str(e):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"A workflow with the name '{workflow.workflow_name}' already exists. Workflow names must be unique.",
+            )
+        else:
+            raise e
+
+    return workflow.workflow_id
+
+
+@router.get("/export/{workflow_id}", status_code=status.HTTP_200_OK)
+async def export_workflow(
+    workflow_id: str, authenticated_user: AuthenticatedUser = Depends(authenticate)
+) -> None:
+    workflow = await _fetch_workflow(authenticated_user.user_id, None, workflow_id)
+
+    workflow_dag = workflow.workflow_dag
+    workflow_name = workflow.workflow_name
+    yaml_str = decompile_workflow_to_yaml(workflow_dag)
+    yaml_str_bytes = yaml_str.encode("utf-8")
+
+    return StreamingResponse(
+        io.BytesIO(yaml_str_bytes),
+        media_type="text/yaml",
+        headers={"Content-Disposition": f'attachment; filename="{workflow_name}.yaml"'},
     )
